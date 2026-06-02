@@ -56,10 +56,7 @@ def run(input_path: str, output_path: str | None = None,
         _apply_rules(e)
 
     for e in all_entries:
-        e.pop("_is_static", None)
         e.pop("_original_order", None)
-        e.pop("_is_boundary_copy", None)
-        e.pop("_is_supplement", None)
 
     wu.save_world_book(all_entries, output_path)
     return output_path
@@ -69,35 +66,13 @@ def is_boundary_entry(content: str) -> tuple | None:
     if wu.detect_markers(content):
         return None
 
-    stripped = content.strip()
-    if "key" in []:
-        pass
+    xml_result = _detect_xml_boundary_simple(content)
+    if xml_result:
+        return xml_result
 
-    m = _XML_TAG_RE.search(stripped)
-    if m:
-        tag = m.group(1)
-        if f"</{tag}>" not in stripped:
-            return ("xml_open", tag, f"<{tag}>")
-        if stripped.startswith(f"<{tag}>") and f"</{tag}>" in stripped:
-            if len(stripped) > len(f"<{tag}>{stripped[stripped.find(f'</{tag}>')+len(f'</{tag}>'):]}".strip()):
-                pass
-
-    m = _XML_CLOSE_RE.search(stripped)
-    if m:
-        tag = m.group(1)
-        first_line = stripped.split("\n")[0].strip()
-        if first_line.startswith(f"</{tag}>"):
-            return ("xml_close", tag, f"</{tag}>")
-
-    for line in stripped.splitlines():
-        m = _MD_BOUNDARY_RE.match(line.strip())
-        if m:
-            heading = m.group(1)
-            base = m.group(2).strip()
-            suffix = m.group(3)
-            btype = "md_open" if suffix in ("开始", "start", "begin") else "md_close"
-            copy_c = f"{heading} {base}{suffix}"
-            return (btype, base, copy_c)
+    md_result = _detect_md_boundary(content)
+    if md_result:
+        return md_result
 
     return None
 
@@ -123,7 +98,8 @@ def _detect_xml_boundary_simple(content: str) -> tuple | None:
     m = _XML_CLOSE_RE.search(stripped)
     if m:
         tag = m.group(1)
-        return ("xml_close", tag, f"</{tag}>")
+        if f"<{tag}>" not in stripped:
+            return ("xml_close", tag, f"</{tag}>")
     return None
 
 
@@ -226,18 +202,8 @@ def _detect_wrapper_style(entries: list[dict]) -> str:
 
 
 def _is_existing_supplement(entry: dict, wrapper_name: str) -> bool:
-    content = entry.get("content", "").strip()
-    key = entry.get("key", [])
-    if key == ["/.*/"]:
-        xml_open = f"<{wrapper_name}>"
-        xml_close = f"</{wrapper_name}>"
-        md_open = f"# {wrapper_name}开始"
-        md_close = f"# {wrapper_name}结束"
-        if content in (xml_open, xml_close, md_open, md_close):
-            return True
-    if content in ("<补充内容>", "</补充内容>", "# 补充内容开始", "# 补充内容结束"):
-        return True
-    return False
+    comment = entry.get("comment", "")
+    return "[supplement-" in comment
 
 
 def _create_supplement_wrapper(entries: list[dict], wrapper_name: str) -> list[dict]:
@@ -269,7 +235,7 @@ def _create_supplement_wrapper(entries: list[dict], wrapper_name: str) -> list[d
         "matchCharacterPersonality": False, "matchCharacterDepthPrompt": False,
         "matchScenario": False, "matchCreatorNotes": False,
         "excludeRecursion": False, "preventRecursion": False,
-        "delayUntilRecursion": False, "ignoreBudget": False,
+        "delayUntilRecursion": 0, "ignoreBudget": False,
         "group": "", "groupOverride": False, "groupWeight": 100,
         "outletName": "", "automationId": "", "vectorized": False,
         "addMemo": False, "triggers": [],
@@ -337,6 +303,11 @@ def _apply_rules(entry: dict) -> None:
     is_copy = entry.pop("_is_boundary_copy", False)
     is_supplement = entry.pop("_is_supplement", False)
 
+    pos = entry.get("position", 0)
+
+    if pos == 7:
+        return
+
     if is_copy or is_supplement:
         entry["constant"] = False
         entry["position"] = 4
@@ -350,7 +321,6 @@ def _apply_rules(entry: dict) -> None:
         entry["delay"] = 0
         return
 
-    pos = entry.get("position", 0)
     depth = entry.get("depth")
 
     if is_static:

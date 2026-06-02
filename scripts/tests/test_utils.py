@@ -144,6 +144,10 @@ class TestFindXmlTags:
         r = wu.find_xml_tags("<X>内容")
         assert len(r) == 0
 
+    def test_self_closing(self):
+        r = wu.find_xml_tags("<X/>")
+        assert len(r) == 0
+
 
 class TestSplitByHeadings:
     def test_h1(self):

@@ -5,8 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from world_book_utils import load_world_book, detect_markers, determine_static
-from world_book_utils import find_xml_tags, parse_content_blocks, count_net_braces
+from world_book_utils import load_world_book, determine_static, parse_content_blocks
+from tools.tool_prompt import run as assemble_prompt
 
 _FALSE_POSITIVE_TAGS = {
     "user", "char", "model", "group", "original",
@@ -49,16 +49,27 @@ def run(input_path: str, output_errors: str | None = None,
         if "content" not in entry:
             errors.append({"code": "A4", "level": "error", "scope": "entry",
                             "uid": uid, "message": "content field missing"})
-
-        content = entry.get("content", "")
-        _check_ejs_integrity(content, uid, errors)
-        _check_xml_tags(content, uid, errors)
-        _check_macro_integrity(content, uid, warnings)
         if strict:
             _check_cache_rules(entry, uid, warnings)
 
-    _check_cross_entry_xml(entries, errors)
     _check_cross_entry_md(entries, warnings)
+
+    try:
+        prompt_text = assemble_prompt(input_path, no_comments=True)
+    except Exception as e:
+        errors.append({"code": "P0", "level": "error", "scope": "file",
+                        "uid": None, "message": f"Failed to assemble prompt: {e}"})
+        result = _build_result(src.name, errors, warnings)
+        if output_errors:
+            with open(output_errors, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+        else:
+            _print_result(result)
+        return result
+
+    _check_ejs_integrity(prompt_text, None, errors)
+    _check_xml_tags(prompt_text, None, errors)
+    _check_macro_integrity(prompt_text, None, warnings)
 
     result = _build_result(src.name, errors, warnings)
     if output_errors:
@@ -71,6 +82,7 @@ def run(input_path: str, output_errors: str | None = None,
 
 
 def _check_ejs_integrity(content, uid, errors):
+    scope = "assembled" if uid is None else "entry"
     pos = 0
     while pos < len(content):
         idx = content.find("<%", pos)
@@ -79,7 +91,7 @@ def _check_ejs_integrity(content, uid, errors):
         close = content.find("%>", idx + 2)
         if close == -1:
             line = content[:idx].count("\n") + 1
-            errors.append({"code": "B1", "level": "error", "scope": "entry",
+            errors.append({"code": "B1", "level": "error", "scope": scope,
                             "uid": uid, "message": f"EJS block not closed near line {line}"})
             break
         pos = close + 2
@@ -90,11 +102,12 @@ def _check_ejs_integrity(content, uid, errors):
         if b["type"] == "ejs":
             depth += b["brace_delta"]
     if depth != 0:
-        errors.append({"code": "B2", "level": "error", "scope": "entry",
+        errors.append({"code": "B2", "level": "error", "scope": scope,
                         "uid": uid, "message": f"EJS brace unbalanced: net={depth}"})
 
 
 def _check_xml_tags(content, uid, errors):
+    scope = "assembled" if uid is None else "entry"
     open_tags = [t for t in re.findall(r"<([\u4e00-\u9fff\w]+)>", content)
                  if t not in _FALSE_POSITIVE_TAGS]
     close_tags = [t for t in re.findall(r"</([\u4e00-\u9fff\w]+)>", content)
@@ -105,19 +118,20 @@ def _check_xml_tags(content, uid, errors):
     cc = Counter(close_tags)
     for tag in oc:
         if oc[tag] > cc.get(tag, 0):
-            errors.append({"code": "C1", "level": "error", "scope": "entry",
+            errors.append({"code": "C1", "level": "error", "scope": scope,
                             "uid": uid, "message": f"XML tag <{tag}> unclosed"})
     for tag in cc:
         if cc[tag] > oc.get(tag, 0):
-            errors.append({"code": "C2", "level": "error", "scope": "entry",
+            errors.append({"code": "C2", "level": "error", "scope": scope,
                             "uid": uid, "message": f"XML tag </{tag}> has no open"})
 
 
 def _check_macro_integrity(content, uid, warnings):
+    scope = "assembled" if uid is None else "entry"
     opens = content.count("{{")
     closes = content.count("}}")
     if opens != closes:
-        warnings.append({"code": "E1", "level": "warning", "scope": "entry",
+        warnings.append({"code": "E1", "level": "warning", "scope": scope,
                           "uid": uid, "message": f"Macro brace mismatch: opens={opens}, closes={closes}"})
 
 
@@ -141,39 +155,26 @@ def _check_cache_rules(entry, uid, warnings):
         warnings.append({"code": "F5", "level": "warning", "scope": "entry",
                           "uid": uid, "message": "content is empty"})
     if content.strip() and determine_static(content) and "{{time}}" in content:
-        warnings.append({"code": "F6", "level": "warning", "scope": "entry",
+        warnings.append({"code": "F7", "level": "warning", "scope": "entry",
                           "uid": uid, "message": "static entry contains {{time}} macro (time-varying)"})
 
-
-def _check_cross_entry_xml(entries, errors):
-    all_open = []
-    all_close = []
-    for key, e in entries:
-        content = e.get("content", "")
-        for m in re.finditer(r"<([\u4e00-\u9fff\w]+)>", content):
-            tag = m.group(1)
-            if tag not in _FALSE_POSITIVE_TAGS:
-                all_open.append((tag, e.get("uid"), e.get("comment", "")))
-        for m in re.finditer(r"</([\u4e00-\u9fff\w]+)>", content):
-            tag = m.group(1)
-            if tag not in _FALSE_POSITIVE_TAGS:
-                all_close.append(tag)
-
-    from collections import Counter
-    oc = Counter(t for t, _, _ in all_open)
-    cc = Counter(all_close)
-    for tag in oc:
-        if oc[tag] > cc.get(tag, 0):
-            open_data = [(uid, cmt) for t, uid, cmt in all_open if t == tag]
-            for uid, cmt in open_data:
-                errors.append({"code": "C4", "level": "error", "scope": "cross-entry",
-                               "uid": uid, "message": f"XML <{tag}> ({cmt}) not closed across entries "
-                                                       f"(opens={oc[tag]}, closes={cc.get(tag, 0)})"})
-    for tag in cc:
-        if cc[tag] > oc.get(tag, 0):
-            errors.append({"code": "C5", "level": "error", "scope": "cross-entry",
-                           "uid": None, "message": f"XML </{tag}> has no matching open across entries "
-                                                   f"(opens={oc.get(tag, 0)}, closes={cc[tag]})"})
+    order = entry.get("order")
+    pos = entry.get("position")
+    depth = entry.get("depth")
+    if order is not None:
+        group_key = (pos, depth)
+        if not hasattr(_check_cache_rules, "_orders"):
+            _check_cache_rules._orders = {}
+        if group_key not in _check_cache_rules._orders:
+            _check_cache_rules._orders[group_key] = {}
+        if order in _check_cache_rules._orders[group_key]:
+            other_uid = _check_cache_rules._orders[group_key][order]
+            warnings.append({"code": "F6", "level": "warning", "scope": "entry",
+                              "uid": uid,
+                              "message": f"order={order} duplicate with uid={other_uid} "
+                                         f"in group (pos={pos}, depth={depth})"})
+        else:
+            _check_cache_rules._orders[group_key][order] = uid
 
 
 def _check_cross_entry_md(entries, warnings):
@@ -224,11 +225,13 @@ def _print_result(result):
     if errors:
         print(f"\n[ERRORS] ({len(errors)}):")
         for e in errors:
-            print(f"  [{e['code']}] uid={e.get('uid')}: {e['message']}")
+            uid_label = "assembled" if e.get("uid") is None else f"uid={e['uid']}"
+            print(f"  [{e['code']}] {uid_label}: {e['message']}")
     if warnings:
         print(f"\n[WARNINGS] ({len(warnings)}):")
         for w in warnings:
-            print(f"  [{w['code']}] uid={w.get('uid')}: {w['message']}")
+            uid_label = "assembled" if w.get("uid") is None else f"uid={w['uid']}"
+            print(f"  [{w['code']}] {uid_label}: {w['message']}")
     print(f"\n{'─'*60}")
     print(f"  Result: {len(errors)} errors, {len(warnings)} warnings")
     print(f"  {'PASS' if result['pass'] else 'FAIL - not recommended to continue!'}")

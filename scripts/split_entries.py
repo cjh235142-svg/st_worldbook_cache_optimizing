@@ -1,4 +1,5 @@
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 
@@ -50,6 +51,8 @@ def run(world_book_path: str, analysis_path: str, output_path: str | None = None
             segment = "".join(lines[sl:el+1])
             if wu._is_empty_or_heading_only(segment):
                 continue
+            if outermost_tag:
+                segment = _strip_tag_edges(segment, outermost_tag)
             if b["is_dynamic"]:
                 dynamic_segments.append(segment)
             else:
@@ -84,6 +87,15 @@ def run(world_book_path: str, analysis_path: str, output_path: str | None = None
     new_entries = wu.reassign_uids(new_entries)
     wu.save_world_book(new_entries, output_path)
     return output_path
+
+
+_XML_TAG_RE = re.compile(r"<([\u4e00-\u9fff\w]+)>")
+
+
+def _strip_tag_edges(segment: str, tag: str) -> str:
+    s = re.sub(rf"^<{re.escape(tag)}>\s*", "", segment)
+    s = re.sub(rf"\s*</{re.escape(tag)}>\s*$", "", s)
+    return s
 
 
 if __name__ == "__main__":

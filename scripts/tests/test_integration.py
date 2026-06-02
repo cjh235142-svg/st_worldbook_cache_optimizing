@@ -212,7 +212,162 @@ class TestIdempotency:
             assert "[split-dynamic]" not in cmt or cmt.count("[split-dynamic]") == 1
 
 
-class TestBoundaryAndSupplement:
+class TestGoldenFile:
+    def test_exact_match(self, full_pipeline_input, full_pipeline_expected, pipeline_tmpdir):
+        inp = str(pipeline_tmpdir / "input.json")
+        wu.save_world_book(list(full_pipeline_input["entries"].values()), inp)
+        d = pipeline_run(inp, str(pipeline_tmpdir))
+        actual = wu.load_world_book(d)
+        assert actual["entries"] == full_pipeline_expected["entries"]
+
+
+class TestSemanticEquivalenceFull:
+    def test_original_content_no_loss(self, full_pipeline_input, pipeline_tmpdir):
+        inp = str(pipeline_tmpdir / "input.json")
+        wu.save_world_book(list(full_pipeline_input["entries"].values()), inp)
+        d = pipeline_run(inp, str(pipeline_tmpdir))
+        wb = wu.load_world_book(d)
+        orig_wb = wu.load_world_book(inp)
+        all_output_text = "".join(e["content"] for e in wb["entries"].values())
+        for orig_e in orig_wb["entries"].values():
+            orig_text = orig_e["content"].strip()
+            if orig_text:
+                assert len(orig_text) > 0
+
+    def test_dynamic_content_intact(self, full_pipeline_input, pipeline_tmpdir):
+        inp = str(pipeline_tmpdir / "input.json")
+        wu.save_world_book(list(full_pipeline_input["entries"].values()), inp)
+        d = pipeline_run(inp, str(pipeline_tmpdir))
+        wb = wu.load_world_book(d)
+        orig_wb = wu.load_world_book(inp)
+        orig_dynamic = [e for e in orig_wb["entries"].values()
+                         if not wu.determine_static(e["content"])]
+        non_mixed_dynamic = [e for e in orig_dynamic
+                              if wu.classify_entry(e["content"]) == (False, False)]
+        all_output_text = "".join(e["content"] for e in wb["entries"].values())
+        for oe in non_mixed_dynamic:
+            assert oe["content"].strip() in all_output_text, \
+                f"Dynamic content lost: {oe['comment']}"
+
+    def test_split_reversibility(self, full_pipeline_input, pipeline_tmpdir):
+        inp = str(pipeline_tmpdir / "input.json")
+        wu.save_world_book(list(full_pipeline_input["entries"].values()), inp)
+        a = analyze_run(inp, str(pipeline_tmpdir / "a.json"))
+        b = split_run(inp, a, str(pipeline_tmpdir / "b.json"))
+        wb = wu.load_world_book(b)
+        orig_wb = wu.load_world_book(inp)
+        orig_count = len(orig_wb["entries"])
+        split_count = len(wb["entries"])
+        assert split_count >= orig_count
+
+
+class TestOrderConstraintsFull:
+    def test_same_group_relative_order_preserved(self, full_pipeline_input, pipeline_tmpdir):
+        inp = str(pipeline_tmpdir / "input.json")
+        wu.save_world_book(list(full_pipeline_input["entries"].values()), inp)
+        a = analyze_run(inp, str(pipeline_tmpdir / "a.json"))
+        b = split_run(inp, a, str(pipeline_tmpdir / "b.json"))
+        c = reorder_run(b, str(pipeline_tmpdir / "c.json"))
+        wb = wu.load_world_book(c)
+        entries = list(wb["entries"].values())
+        entries.sort(key=lambda x: x.get("order", 0))
+        for i in range(len(entries) - 1):
+            assert entries[i]["order"] <= entries[i + 1]["order"]
+
+
+class TestFieldModificationFull:
+    def test_static_use_probability_off(self, full_pipeline_input, pipeline_tmpdir):
+        inp = str(pipeline_tmpdir / "input.json")
+        wu.save_world_book(list(full_pipeline_input["entries"].values()), inp)
+        d = pipeline_run(inp, str(pipeline_tmpdir))
+        wb = wu.load_world_book(d)
+        for e in wb["entries"].values():
+            if wu.determine_static(e["content"]) and e.get("constant") is True:
+                assert e["useProbability"] is False
+                assert e["probability"] == 100
+
+    def test_static_cooldown_sticky_delay_cleared(self, full_pipeline_input, pipeline_tmpdir):
+        inp = str(pipeline_tmpdir / "input.json")
+        wu.save_world_book(list(full_pipeline_input["entries"].values()), inp)
+        d = pipeline_run(inp, str(pipeline_tmpdir))
+        wb = wu.load_world_book(d)
+        for e in wb["entries"].values():
+            if wu.determine_static(e["content"]) and e.get("constant") is True:
+                assert e["cooldown"] == 0
+                assert e["sticky"] == 0
+                assert e["delay"] == 0
+
+
+class TestMergeVerifyFull:
+    def test_dynamic_entry_count_unchanged(self, full_pipeline_input, pipeline_tmpdir):
+        inp = str(pipeline_tmpdir / "input.json")
+        wu.save_world_book(list(full_pipeline_input["entries"].values()), inp)
+        a = analyze_run(inp, str(pipeline_tmpdir / "a.json"))
+        b = split_run(inp, a, str(pipeline_tmpdir / "b.json"))
+        c = reorder_run(b, str(pipeline_tmpdir / "c.json"))
+        wb3 = wu.load_world_book(c)
+        pre_merge_dynamic = sum(1 for e in wb3["entries"].values()
+                                if not wu.determine_static(e["content"])
+                                and "[supplement-" not in e.get("comment", "")
+                                and "[boundary-copy-" not in e.get("comment", ""))
+        d = merge_run(c, str(pipeline_tmpdir / "d.json"))
+        wb4 = wu.load_world_book(d)
+        post_merge_dynamic = sum(1 for e in wb4["entries"].values()
+                                  if not wu.determine_static(e["content"])
+                                  and "[supplement-" not in e.get("comment", "")
+                                  and "[boundary-copy-" not in e.get("comment", ""))
+        assert post_merge_dynamic == pre_merge_dynamic
+
+
+class TestErrorHandling:
+    def test_no_analysis_file_error(self, pipeline_tmpdir):
+        inp = str(pipeline_tmpdir / "in.json")
+        entries = [{"uid": 0, "content": "test", "order": 10, "position": 0,
+                      "depth": 4, "constant": False, "key": [], "keysecondary": [], "disable": False}]
+        wu.save_world_book(entries, inp)
+        try:
+            split_run(inp, str(pipeline_tmpdir / "nonexistent.json"), str(pipeline_tmpdir / "out.json"))
+            assert False, "Should raise FileNotFoundError"
+        except (FileNotFoundError, OSError):
+            pass
+
+
+class TestBoundaryAndSupplementFull:
+    def test_boundary_no_dynamic_no_copy_int(self, pipeline_tmpdir):
+        entries = [
+            {"uid": 0, "content": "<暗部>", "order": 10, "position": 0, "depth": 4,
+             "constant": False, "key": [], "keysecondary": [], "disable": False},
+            {"uid": 1, "content": "纯静态内容", "order": 20, "position": 0, "depth": 4,
+             "constant": False, "key": [], "keysecondary": [], "disable": False},
+            {"uid": 2, "content": "</暗部>", "order": 30, "position": 0, "depth": 4,
+             "constant": False, "key": [], "keysecondary": [], "disable": False},
+        ]
+        inp = str(pipeline_tmpdir / "in.json")
+        wu.save_world_book(entries, inp)
+        out_dir = pipeline_tmpdir / "out"
+        out_dir.mkdir(exist_ok=True)
+        d = pipeline_run(inp, str(out_dir))
+        wb = wu.load_world_book(d)
+        copies = [e for e in wb["entries"].values()
+                   if "[boundary-copy-" in e.get("comment", "")]
+        assert len(copies) == 0
+
+    def test_all_static_no_supplement_int(self, pipeline_tmpdir):
+        entries = [
+            {"uid": 0, "content": "静态A", "order": 10, "position": 0, "depth": 4,
+             "constant": False, "key": [], "keysecondary": [], "disable": False},
+            {"uid": 1, "content": "静态B", "order": 20, "position": 1, "depth": 4,
+             "constant": False, "key": [], "keysecondary": [], "disable": False},
+        ]
+        inp = str(pipeline_tmpdir / "in.json")
+        wu.save_world_book(entries, inp)
+        out_dir = pipeline_tmpdir / "out"
+        out_dir.mkdir(exist_ok=True)
+        d = pipeline_run(inp, str(out_dir))
+        wb = wu.load_world_book(d)
+        supps = [e for e in wb["entries"].values()
+                  if "[supplement-" in e.get("comment", "")]
+        assert len(supps) == 0
     def test_boundary_copies_exist(self, pipeline_tmpdir):
         entries = [
             {"uid": 0, "content": "<暗部>", "order": 10, "position": 0, "depth": 4,

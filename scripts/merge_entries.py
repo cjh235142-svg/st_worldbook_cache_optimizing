@@ -79,50 +79,18 @@ def _merge_one_group(group: list[dict]) -> dict:
     max_order = group[-1].get("order", 0)
     base = group[0]
 
-    return {
-        "position": base.get("position", 0),
-        "constant": base.get("constant", False),
-        "depth": base.get("depth"),
-        "content": merged_content,
-        "order": min_order,
-        "comment": f"合并:{min_order}-{max_order}",
-        "key": [],
-        "keysecondary": [],
-        "role": base.get("role"),
-        "useProbability": False,
-        "disable": False,
-        "selective": True,
-        "selectiveLogic": 0,
-        "probability": 100,
-        "sticky": 0,
-        "cooldown": 0,
-        "delay": 0,
-        "scanDepth": None,
-        "caseSensitive": None,
-        "matchWholeWords": None,
-        "useGroupScoring": None,
-        "matchPersonaDescription": False,
-        "matchCharacterDescription": False,
-        "matchCharacterPersonality": False,
-        "matchCharacterDepthPrompt": False,
-        "matchScenario": False,
-        "matchCreatorNotes": False,
-        "excludeRecursion": False,
-        "preventRecursion": False,
-        "delayUntilRecursion": False,
-        "ignoreBudget": False,
-        "group": "",
-        "groupOverride": False,
-        "groupWeight": 100,
-        "outletName": "",
-        "automationId": "",
-        "vectorized": False,
-        "addMemo": False,
-        "triggers": [],
-        "characterFilter": {"names": [], "tags": [], "isExclude": False},
-        "displayIndex": None,
-        "uid": None,
-    }
+    defaults = wu.get_default_entry_fields()
+    defaults["position"] = base.get("position", 0)
+    defaults["constant"] = base.get("constant", False)
+    defaults["depth"] = base.get("depth")
+    defaults["content"] = merged_content
+    defaults["order"] = min_order
+    defaults["comment"] = f"合并:{min_order}-{max_order}"
+    defaults["key"] = []
+    defaults["keysecondary"] = []
+    defaults["role"] = base.get("role")
+    defaults["useProbability"] = False
+    return defaults
 
 
 if __name__ == "__main__":

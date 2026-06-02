@@ -324,7 +324,7 @@ def get_default_entry_fields() -> dict:
         "matchCharacterPersonality": False, "matchCharacterDepthPrompt": False,
         "matchScenario": False, "matchCreatorNotes": False,
         "excludeRecursion": False, "preventRecursion": False,
-        "delayUntilRecursion": False, "ignoreBudget": False,
+        "delayUntilRecursion": 0, "ignoreBudget": False,
         "group": "", "groupOverride": False, "groupWeight": 100,
         "outletName": "", "automationId": "", "vectorized": False,
         "addMemo": False, "triggers": [],

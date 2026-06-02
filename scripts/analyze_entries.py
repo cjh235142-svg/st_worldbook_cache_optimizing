@@ -14,27 +14,13 @@ def run(input_path: str, output_path: str | None = None) -> str:
 
     wb = wu.load_world_book(input_path)
     ref_path = str(Path(input_path).resolve())
-    backup_file = str(ref_path)
-    do_backup = not str(src.stem).endswith("_analysis")
-    if not do_backup:
-        for suffix in ["_analysis", "_split", "_reordered", "_merged"]:
-            if src.stem.endswith(suffix):
-                do_backup = False
-                break
-    if do_backup and not str(src.stem).endswith("_analysis"):
-        ref = Path(ref_path)
-        with open(ref, "r", encoding="utf-8") as f:
-            orig_data = json.load(f)
-        entries = orig_data.get("entries", {})
-        if isinstance(entries, list):
-            entries = {str(i): e for i, e in enumerate(entries)}
-        unique = True
-        for stem_suffix in ["_analysis", "_split", "_reordered", "_merged"]:
-            if ref.stem.endswith(stem_suffix):
-                unique = False
-                break
-        if unique:
-            wu.backup_file(input_path)
+    src = Path(ref_path)
+    is_pipeline_product = any(
+        src.stem.endswith(suffix)
+        for suffix in ("_analysis", "_split", "_reordered", "_merged")
+    )
+    if not is_pipeline_product:
+        wu.backup_file(input_path)
 
     entries_data = wb.get("entries", {})
     if isinstance(entries_data, list):
@@ -126,7 +112,14 @@ def _detect_split_boundaries(content: str, compound_ranges: list | None) -> list
                     "is_dynamic": is_dyn,
                 })
             else:
-                continue
+                boundaries.append({
+                    "type": "heading",
+                    "heading_level": seg.get("heading_level"),
+                    "heading_text": seg.get("heading_text", ""),
+                    "start_line": sl,
+                    "end_line": el,
+                    "is_dynamic": True,
+                })
         else:
             seg_text = "".join(lines[sl:el+1])
             is_dyn = len(wu.detect_markers(seg_text)) > 0
