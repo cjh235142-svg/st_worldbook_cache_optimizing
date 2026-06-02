@@ -24,6 +24,16 @@ DYNAMIC_MARKER_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("{{time}}", re.compile(r"\{\{time\}\}")),
     ("{{date}}", re.compile(r"\{\{date\}\}")),
     ("{{idleDuration}}", re.compile(r"\{\{idleDuration\}\}")),
+    ("{{random", re.compile(r"\{\{random\b")),
+    ("{{roll", re.compile(r"\{\{roll\b")),
+    ("{{format_message_variable", re.compile(r"\{\{format_message_variable\b")),
+    ("{{input}}", re.compile(r"\{\{input\}\}")),
+    ("{{lastMessage}}", re.compile(r"\{\{lastMessage\}\}")),
+    ("{{lastMessageId}}", re.compile(r"\{\{lastMessageId\}\}")),
+    ("{{lastUserMessage}}", re.compile(r"\{\{lastUserMessage\}\}")),
+    ("{{lastCharMessage}}", re.compile(r"\{\{lastCharMessage\}\}")),
+    ("{{bias", re.compile(r"\{\{bias\b")),
+    ("{{inject", re.compile(r"\{\{inject")),
     ("<state>", re.compile(r"<state>")),
 ]
 

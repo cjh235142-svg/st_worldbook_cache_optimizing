@@ -93,6 +93,55 @@ class TestDetectMarkers:
         r = wu.detect_markers("{{idleDuration}}")
         assert "{{idleDuration}}" in r
 
+    def test_random_macro_dynamic(self):
+        r = wu.detect_markers("{{random:- A:B:C }}")
+        assert "{{random" in r
+
+    def test_roll_macro_dynamic(self):
+        r = wu.detect_markers("{{roll:1d6}}")
+        assert "{{roll" in r
+
+    def test_format_message_variable_dynamic(self):
+        r = wu.detect_markers("{{format_message_variable::stat_data}}")
+        assert "{{format_message_variable" in r
+
+    def test_input_macro_dynamic(self):
+        r = wu.detect_markers("{{input}}")
+        assert "{{input}}" in r
+
+    def test_lastMessage_macro_dynamic(self):
+        r = wu.detect_markers("{{lastMessage}}")
+        assert "{{lastMessage}}" in r
+
+    def test_lastMessageId_macro_dynamic(self):
+        r = wu.detect_markers("{{lastMessageId}}")
+        assert "{{lastMessageId}}" in r
+
+    def test_lastUserMessage_macro_dynamic(self):
+        r = wu.detect_markers("{{lastUserMessage}}")
+        assert "{{lastUserMessage}}" in r
+
+    def test_lastCharMessage_macro_dynamic(self):
+        r = wu.detect_markers("{{lastCharMessage}}")
+        assert "{{lastCharMessage}}" in r
+
+    def test_bias_macro_dynamic(self):
+        r = wu.detect_markers("{{bias:keep typing}}")
+        assert "{{bias" in r
+
+    def test_inject_macro_dynamic(self):
+        r = wu.detect_markers("{{inject::content}}")
+        assert "{{inject" in r
+
+    def test_random_with_underscore_not_matched(self):
+        r = wu.detect_markers("{{random_thing}}")
+        assert "{{random" not in r
+
+    def test_random_exact_not_matched(self):
+        """Verify static macros like {{char}} are not caught by {{random\b}"""
+        r = wu.detect_markers("{{char}}")
+        assert "{{random" not in r
+
 
 class TestDetermineStatic:
     def test_pure_static(self):

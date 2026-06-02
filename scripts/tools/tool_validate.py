@@ -128,23 +128,6 @@ def _check_xml_tags(content, uid, errors):
     code_no_open = "C5" if is_global else "C2"
     code_cross = "C3"
 
-    open_tags = [t for t in re.findall(r"<([\u4e00-\u9fff\w]+)>", content)
-                 if t not in _FALSE_POSITIVE_TAGS]
-    close_tags = [t for t in re.findall(r"</([\u4e00-\u9fff\w]+)>", content)
-                   if t not in _FALSE_POSITIVE_TAGS]
-
-    from collections import Counter
-    oc = Counter(open_tags)
-    cc = Counter(close_tags)
-    for tag in oc:
-        if oc[tag] > cc.get(tag, 0):
-            errors.append({"code": code_unclosed, "level": "error", "scope": scope,
-                            "uid": uid, "message": f"XML tag <{tag}> unclosed"})
-    for tag in cc:
-        if cc[tag] > oc.get(tag, 0):
-            errors.append({"code": code_no_open, "level": "error", "scope": scope,
-                            "uid": uid, "message": f"XML tag </{tag}> has no open"})
-
     _tag_re = re.compile(r"<(/?)([\u4e00-\u9fff\w]+)>")
     stack = []
     pos = 0
@@ -223,6 +206,19 @@ def _check_cache_rules(entry, uid, warnings):
     if content.strip() and determine_static(content) and "{{time}}" in content:
         warnings.append({"code": "F7", "level": "warning", "scope": "entry",
                           "uid": uid, "message": "static entry contains {{time}} macro (time-varying)"})
+
+    # F8: self-closing tag (same <tag> at both start and end line)
+    lines = entry.get("content", "").splitlines()
+    if len(lines) >= 2:
+        m1 = re.match(r'^<([\u4e00-\u9fff\w]+)>$', lines[0].strip())
+        m2 = re.match(r'^<([\u4e00-\u9fff\w]+)>$', lines[-1].strip())
+        if m1 and m2 and m1.group(1) == m2.group(1):
+            tag = m1.group(1)
+            if tag not in _FALSE_POSITIVE_TAGS:
+                warnings.append({"code": "F8", "level": "warning", "scope": "entry",
+                                  "uid": uid,
+                                  "message": f"possible self-closing tag <{tag}> at both start and end, "
+                                             f"should use <{tag}>...</{tag}>"})
 
     order = entry.get("order")
     pos = entry.get("position")

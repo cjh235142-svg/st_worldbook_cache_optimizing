@@ -59,6 +59,8 @@ def _is_mergeable_static(entry: dict) -> bool:
     comment = entry.get("comment", "")
     if entry.get("position") == 7:
         return False
+    if entry.get("disable", False):
+        return False
     if "[boundary-copy-" in comment:
         return False
     if "[supplement-" in comment:
