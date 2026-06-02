@@ -1,0 +1,20 @@
+{
+  "entries": {
+    "0": {
+      "uid": 0, "key": [], "keysecondary": [], "comment": "纯EJS全覆盖",
+      "content": "<% if (getvar('stage') <= 1) { %>\n# 第一阶段\n\t这是第一阶段的内容\n<% } else if (getvar('stage') <= 3) { %>\n# 第二阶段\n\t这是第二阶段的内容\n<% } else { %>\n# 最终阶段\n\t这是最终阶段的内容\n<% } %>",
+      "constant": false, "disable": false, "selective": true, "selectiveLogic": 0,
+      "order": 100, "position": 0, "depth": 4, "role": null,
+      "probability": 100, "useProbability": true, "sticky": 0, "cooldown": 0, "delay": 0,
+      "scanDepth": null, "caseSensitive": null, "matchWholeWords": null, "useGroupScoring": null,
+      "matchPersonaDescription": false, "matchCharacterDescription": false,
+      "matchCharacterPersonality": false, "matchCharacterDepthPrompt": false,
+      "matchScenario": false, "matchCreatorNotes": false,
+      "excludeRecursion": false, "preventRecursion": false, "delayUntilRecursion": false,
+      "ignoreBudget": false, "group": "", "groupOverride": false, "groupWeight": 100,
+      "outletName": "", "automationId": "", "vectorized": false, "addMemo": false,
+      "triggers": [], "characterFilter": {"names": [], "tags": [], "isExclude": false},
+      "displayIndex": 0
+    }
+  }
+}

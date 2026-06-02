@@ -1,0 +1,111 @@
+{
+  "source": "small_world_book.json",
+  "generated_at": "2026-06-02T00:43:31.910920",
+  "entries": [
+    {
+      "uid": 0,
+      "comment": "静态A",
+      "is_static": true,
+      "is_mixed": false,
+      "detected_markers": [],
+      "suggested_split": false,
+      "ejs_compound_ranges": null,
+      "split_boundaries": null
+    },
+    {
+      "uid": 1,
+      "comment": "静态B",
+      "is_static": true,
+      "is_mixed": false,
+      "detected_markers": [],
+      "suggested_split": false,
+      "ejs_compound_ranges": null,
+      "split_boundaries": null
+    },
+    {
+      "uid": 2,
+      "comment": "静态C",
+      "is_static": true,
+      "is_mixed": false,
+      "detected_markers": [],
+      "suggested_split": false,
+      "ejs_compound_ranges": null,
+      "split_boundaries": null
+    },
+    {
+      "uid": 3,
+      "comment": "动态A",
+      "is_static": false,
+      "is_mixed": false,
+      "detected_markers": [
+        "<%=",
+        "{{getvar::",
+        "getvar("
+      ],
+      "suggested_split": false,
+      "ejs_compound_ranges": null,
+      "split_boundaries": null
+    },
+    {
+      "uid": 4,
+      "comment": "动态B",
+      "is_static": false,
+      "is_mixed": true,
+      "detected_markers": [
+        "<% if",
+        "<%",
+        "variables."
+      ],
+      "suggested_split": true,
+      "ejs_compound_ranges": null,
+      "split_boundaries": null
+    },
+    {
+      "uid": 5,
+      "comment": "混合条目",
+      "is_static": false,
+      "is_mixed": true,
+      "detected_markers": [
+        "<% if",
+        "<%-",
+        "<%",
+        "getvar(",
+        "variables."
+      ],
+      "suggested_split": true,
+      "ejs_compound_ranges": null,
+      "split_boundaries": [
+        {
+          "type": "heading",
+          "heading_level": null,
+          "heading_text": "",
+          "start_line": 0,
+          "end_line": 0,
+          "is_dynamic": false
+        },
+        {
+          "type": "heading",
+          "heading_level": 2,
+          "heading_text": "固定设定",
+          "start_line": 1,
+          "end_line": 3,
+          "is_dynamic": false
+        },
+        {
+          "type": "heading",
+          "heading_level": 2,
+          "heading_text": "动态状态",
+          "start_line": 4,
+          "end_line": 7,
+          "is_dynamic": true
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "static": 3,
+    "dynamic": 1,
+    "mixed": 2
+  }
+}
