@@ -84,18 +84,18 @@ def run(world_book_path: str, analysis_path: str, output_path: str | None = None
 
 
 def _build_content(boundaries: list[tuple[str, dict]]) -> str:
-    wrapped = []
+    by_tag = {}   # tag -> list of stripped segments
     unwrapped = []
     for segment, b in boundaries:
         tag = b.get("wrap_tag")
         s = _strip_all_standalone_tag_lines(segment)
         if tag:
-            wrapped.append(f"<{tag}>\n{s}\n</{tag}>")
+            by_tag.setdefault(tag, []).append(s)
         else:
             unwrapped.append(s)
     parts = []
-    if wrapped:
-        parts.append("\n\n".join(wrapped))
+    for tag, segments in by_tag.items():
+        parts.append(f"<{tag}>\n" + "\n\n".join(segments) + f"\n</{tag}>")
     if unwrapped:
         parts.append("\n\n".join(unwrapped))
     return "\n\n".join(parts)
