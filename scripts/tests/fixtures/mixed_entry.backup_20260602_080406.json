@@ -1,0 +1,21 @@
+{
+  "entries": {
+    "0": {
+      "uid": 0, "key": ["御坂美琴"], "keysecondary": [],
+      "comment": "核心01：御坂美琴",
+      "content": "<御坂美琴>\n## 人物介绍\n学园都市排名第三的Level 5超能力者，就读于常盘台中学。\n能力为超电磁炮（Railgun），能够操纵电磁力。\n## 关系状态\n当前对一方通行的态度: <%- getvar('misaka_relation') %>\n当前与上条当麻的好感度: <%- getvar('misaka_favor') %>\n</御坂美琴>",
+      "constant": false, "disable": false, "selective": true, "selectiveLogic": 0,
+      "order": 100, "position": 0, "depth": 4, "role": null,
+      "probability": 100, "useProbability": true, "sticky": 0, "cooldown": 0, "delay": 0,
+      "scanDepth": null, "caseSensitive": null, "matchWholeWords": null, "useGroupScoring": null,
+      "matchPersonaDescription": false, "matchCharacterDescription": false,
+      "matchCharacterPersonality": false, "matchCharacterDepthPrompt": false,
+      "matchScenario": false, "matchCreatorNotes": false,
+      "excludeRecursion": false, "preventRecursion": false, "delayUntilRecursion": false,
+      "ignoreBudget": false, "group": "", "groupOverride": false, "groupWeight": 100,
+      "outletName": "", "automationId": "", "vectorized": false, "addMemo": false,
+      "triggers": [], "characterFilter": {"names": [], "tags": [], "isExclude": false},
+      "displayIndex": 0
+    }
+  }
+}

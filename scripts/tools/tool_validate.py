@@ -8,6 +8,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from world_book_utils import load_world_book, detect_markers, determine_static
 from world_book_utils import find_xml_tags, parse_content_blocks, count_net_braces
 
+_FALSE_POSITIVE_TAGS = {
+    "user", "char", "model", "group", "original",
+    "br", "hr", "img", "input", "link", "meta",
+    "span", "div", "p", "b", "i", "a",
+    "content", "WritingStyle",
+    "Variable_Format", "Update", "Update_Analysis",
+    "json_patch", "status_current_variable", "Variable_Rules",
+}
+
 
 def run(input_path: str, output_errors: str | None = None,
         strict: bool = False) -> dict:
@@ -86,11 +95,10 @@ def _check_ejs_integrity(content, uid, errors):
 
 
 def _check_xml_tags(content, uid, errors):
-    tags = find_xml_tags(content)
-    open_tags = re.findall(r"<([\u4e00-\u9fff\w]+)>", content)
-    close_tags = re.findall(r"</([\u4e00-\u9fff\w]+)>", content)
-    opener_indexes = [m.start() for m in re.finditer(r"<([\u4e00-\u9fff\w]+)>", content)]
-    closer_indexes = [m.start() for m in re.finditer(r"</([\u4e00-\u9fff\w]+)>", content)]
+    open_tags = [t for t in re.findall(r"<([\u4e00-\u9fff\w]+)>", content)
+                 if t not in _FALSE_POSITIVE_TAGS]
+    close_tags = [t for t in re.findall(r"</([\u4e00-\u9fff\w]+)>", content)
+                  if t not in _FALSE_POSITIVE_TAGS]
 
     from collections import Counter
     oc = Counter(open_tags)
@@ -143,19 +151,29 @@ def _check_cross_entry_xml(entries, errors):
     for key, e in entries:
         content = e.get("content", "")
         for m in re.finditer(r"<([\u4e00-\u9fff\w]+)>", content):
-            all_open.append((m.group(1), e.get("uid"), e.get("comment", "")))
+            tag = m.group(1)
+            if tag not in _FALSE_POSITIVE_TAGS:
+                all_open.append((tag, e.get("uid"), e.get("comment", "")))
         for m in re.finditer(r"</([\u4e00-\u9fff\w]+)>", content):
-            all_close.append(m.group(1))
+            tag = m.group(1)
+            if tag not in _FALSE_POSITIVE_TAGS:
+                all_close.append(tag)
 
     from collections import Counter
     oc = Counter(t for t, _, _ in all_open)
     cc = Counter(all_close)
     for tag in oc:
-        if not any(t2 == tag for t2 in cc):
+        if oc[tag] > cc.get(tag, 0):
             open_data = [(uid, cmt) for t, uid, cmt in all_open if t == tag]
             for uid, cmt in open_data:
                 errors.append({"code": "C4", "level": "error", "scope": "cross-entry",
-                               "uid": uid, "message": f"XML <{tag}> ({cmt}) not closed across entries"})
+                               "uid": uid, "message": f"XML <{tag}> ({cmt}) not closed across entries "
+                                                       f"(opens={oc[tag]}, closes={cc.get(tag, 0)})"})
+    for tag in cc:
+        if cc[tag] > oc.get(tag, 0):
+            errors.append({"code": "C5", "level": "error", "scope": "cross-entry",
+                           "uid": None, "message": f"XML </{tag}> has no matching open across entries "
+                                                   f"(opens={oc.get(tag, 0)}, closes={cc[tag]})"})
 
 
 def _check_cross_entry_md(entries, warnings):

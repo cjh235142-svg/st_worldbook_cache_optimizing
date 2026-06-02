@@ -1,0 +1,36 @@
+{
+  "entries": {
+    "0": {
+      "uid": 0, "key": [], "keysecondary": [], "comment": "纯静态XML",
+      "content": "<角色>这是一个纯静态的条目描述，用于测试静态判定。\n包含一些设定信息，没有任何变量或EJS标记。</角色>",
+      "constant": false, "disable": false, "selective": true, "selectiveLogic": 0,
+      "order": 100, "position": 0, "depth": 4, "role": null,
+      "probability": 100, "useProbability": true, "sticky": 0, "cooldown": 0, "delay": 0,
+      "scanDepth": null, "caseSensitive": null, "matchWholeWords": null, "useGroupScoring": null,
+      "matchPersonaDescription": false, "matchCharacterDescription": false,
+      "matchCharacterPersonality": false, "matchCharacterDepthPrompt": false,
+      "matchScenario": false, "matchCreatorNotes": false,
+      "excludeRecursion": false, "preventRecursion": false, "delayUntilRecursion": false,
+      "ignoreBudget": false, "group": "", "groupOverride": false, "groupWeight": 100,
+      "outletName": "", "automationId": "", "vectorized": false, "addMemo": false,
+      "triggers": [], "characterFilter": {"names": [], "tags": [], "isExclude": false},
+      "displayIndex": 0
+    },
+    "1": {
+      "uid": 1, "key": ["角色A"], "keysecondary": [], "comment": "纯静态文本",
+      "content": "这是另一个纯文本的静态描述，使用了{{char}}和{{user}}等静态宏。",
+      "constant": false, "disable": false, "selective": true, "selectiveLogic": 0,
+      "order": 200, "position": 1, "depth": 4, "role": null,
+      "probability": 100, "useProbability": true, "sticky": 0, "cooldown": 0, "delay": 0,
+      "scanDepth": null, "caseSensitive": null, "matchWholeWords": null, "useGroupScoring": null,
+      "matchPersonaDescription": false, "matchCharacterDescription": false,
+      "matchCharacterPersonality": false, "matchCharacterDepthPrompt": false,
+      "matchScenario": false, "matchCreatorNotes": false,
+      "excludeRecursion": false, "preventRecursion": false, "delayUntilRecursion": false,
+      "ignoreBudget": false, "group": "", "groupOverride": false, "groupWeight": 100,
+      "outletName": "", "automationId": "", "vectorized": false, "addMemo": false,
+      "triggers": [], "characterFilter": {"names": [], "tags": [], "isExclude": false},
+      "displayIndex": 1
+    }
+  }
+}
