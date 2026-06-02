@@ -3,28 +3,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from world_book_utils import load_world_book, determine_static, sort_entries
+import world_book_utils as wu
 
 
 def run(input_path: str, fmt: str = "table", filter_type: str | None = None) -> str:
-    wb = load_world_book(input_path)
+    wb = wu.load_world_book(input_path)
     entries = list(wb.get("entries", {}).values())
 
     for e in entries:
-        e["_is_static"] = determine_static(e.get("content", ""))
-        comment = e.get("comment", "")
-        key = e.get("key", [])
-        is_boundary_or_supp = "[boundary-copy-" in comment or "[supplement-" in comment
-        is_wildcard = key == ["/.*/"]
-        if is_boundary_or_supp or is_wildcard:
-            e["_is_static"] = False
+        e["_is_static"] = wu.determine_static(e.get("content", ""))
+        wu.override_entry_dynamic_status(e)
 
     if filter_type == "static":
         entries = [e for e in entries if e["_is_static"]]
     elif filter_type == "dynamic":
         entries = [e for e in entries if not e["_is_static"]]
 
-    entries = sort_entries(entries)
+    entries = wu.sort_entries(entries)
 
     if fmt == "csv":
         lines = ["order,pos,depth,static,constant,uid,comment"]

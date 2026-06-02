@@ -9,7 +9,8 @@ DYNAMIC_MARKER_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("<% if", re.compile(r"<%[-_]?\s*if\b")),
     ("<%=", re.compile(r"<%=")),
     ("<%-", re.compile(r"<%-")),
-    ("<%", re.compile(r"<%(?![-=])\s*")),
+    # <%# EJS 注释不影响输出，不在动态标记列表中
+    ("<%", re.compile(r"<%(?![-=#])\s*")),
     ("{{getvar::", re.compile(r"\{\{getvar::")),
     ("{{setvar::", re.compile(r"\{\{setvar::")),
     ("{{incvar::", re.compile(r"\{\{incvar::")),
@@ -54,8 +55,6 @@ def _strip_string_literals(code: str) -> str:
                 if code[i] == '\\':
                     i += 2
                 elif code[i] == delim:
-                    if delim == '`':
-                        break
                     i += 1
                     break
                 else:
@@ -109,7 +108,7 @@ def has_special_plugin(content: str, comment: str = "") -> bool:
 
 
 def _strip_ejs_blocks(content: str) -> str:
-    return re.sub(r"<%[-_=]?.*?%>", "", content, flags=re.DOTALL)
+    return re.sub(r"<%[-_=#]?.*?%>", "", content, flags=re.DOTALL)
 
 
 def _strip_macros(content: str) -> str:
@@ -122,33 +121,22 @@ def _strip_ejs_and_macros(content: str) -> str:
     return content
 
 
+_EJS_OPEN_RE = re.compile(r"<%(?:[_=#-])?")
+
+
 def parse_content_blocks(content: str) -> list[dict]:
     lines = content.splitlines(keepends=True)
     blocks = []
     i = 0
     while i < len(lines):
         line = lines[i]
-        stripped = line.lstrip()
-        ejs_begin = -1
-        for keyword in ("<%_", "<%=", "<%-", "<%#", "<%"):
-            idx = line.find(keyword)
-            if idx != -1:
-                if ejs_begin == -1 or idx < ejs_begin:
-                    ejs_begin = idx
-        if ejs_begin != -1:
-            block_lines = []
-            block_lines.append(line)
+        m = _EJS_OPEN_RE.search(line)
+        if m:
+            ejs_begin = m.start()
+            body_start = m.end()
             if "%>" in line[ejs_begin + 2:]:
-                body_start = ejs_begin + 2
-                for kw in ("<%_", "<%=", "<%-", "<%#", "<%"):
-                    if line[ejs_begin:].startswith(kw):
-                        body_start = ejs_begin + len(kw)
-                        break
                 end_idx = line.rfind("%>", ejs_begin + 2)
-                if end_idx != -1:
-                    ejs_body = line[body_start:end_idx]
-                else:
-                    ejs_body = line[body_start:]
+                ejs_body = line[body_start:end_idx]
                 blocks.append({"type": "ejs", "content": ejs_body.strip(),
                                "start_line": i, "end_line": i,
                                "brace_delta": count_net_braces(ejs_body)})
@@ -157,23 +145,18 @@ def parse_content_blocks(content: str) -> list[dict]:
             else:
                 j = i + 1
                 while j < len(lines):
-                    block_lines.append(lines[j])
                     if "%>" in lines[j]:
                         break
                     j += 1
-                raw = "".join(block_lines)
-                ejs_start = 0
-                for kw in ("<%_", "<%=", "<%-", "<%#", "<%"):
-                    idx2 = raw.find(kw)
-                    if idx2 != -1:
-                        ejs_start = idx2 + len(kw)
-                        break
+                raw = "".join(lines[i:j + 1]) if j < len(lines) else "".join(lines[i:])
+                m2 = _EJS_OPEN_RE.search(raw)
+                ejs_start = m2.end() if m2 else len(raw)
                 ejs_end = raw.rfind("%>")
                 if ejs_end == -1:
                     ejs_end = len(raw)
                 ejs_body = raw[ejs_start:ejs_end]
                 blocks.append({"type": "ejs", "content": ejs_body.strip(),
-                               "start_line": i, "end_line": j,
+                               "start_line": i, "end_line": j if j < len(lines) else len(lines) - 1,
                                "brace_delta": count_net_braces(ejs_body)})
                 i = j + 1
                 continue
@@ -370,11 +353,30 @@ def reassign_uids(entries: list[dict]) -> list[dict]:
     return entries
 
 
+def reassign_orders(entries: list[dict]) -> list[dict]:
+    for i, e in enumerate(entries):
+        e["order"] = i
+    return entries
+
+
 def is_outlet_entry(entry: dict) -> bool:
     return entry.get("position") == 7
 
 
+def override_entry_dynamic_status(entry: dict) -> None:
+    comment = entry.get("comment", "")
+    key = entry.get("key", [])
+    if "[boundary-copy-" in comment or "[supplement-" in comment or key == ["/.*/"]:
+        entry["_is_static"] = False
+
+
 def sort_entries(entries: list[dict]) -> list[dict]:
+    """按 6 键排序。
+
+    注意：此函数会就地修改传入的 entries，为每个条目添加
+    _is_static、_original_order、_is_boundary_copy、_is_supplement
+    等临时字段。调用方应在输出前清理。
+    """
     for e in entries:
         e.setdefault("_is_static", determine_static(e.get("content", "")))
         e.setdefault("_original_order", e.get("order", 100))

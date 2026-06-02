@@ -212,7 +212,8 @@ def _check_cache_rules(entry, uid, warnings):
     if pos != 4 and determine_static(entry.get("content", "")) is False:
         warnings.append({"code": "F3", "level": "warning", "scope": "entry",
                           "uid": uid, "message": f"dynamic entry with position={pos} (expected 4)"})
-    if entry.get("depth") and entry.get("depth", 0) >= 10 and entry.get("position") != 4:
+    depth = entry.get("depth")
+    if depth is not None and depth >= 10 and entry.get("position") != 4:
         warnings.append({"code": "F4", "level": "warning", "scope": "entry",
                           "uid": uid, "message": f"depth>=10 but position={pos} (depth only meaningful at pos=4)"})
     content = entry.get("content", "").strip()

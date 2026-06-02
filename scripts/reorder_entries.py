@@ -49,7 +49,7 @@ def run(input_path: str, output_path: str | None = None,
     all_entries = list(entries) + boundary_copies + supplements
     all_entries = wu.sort_entries(all_entries)
     all_entries = _prune_empty(all_entries)
-    all_entries = _reassign_orders(all_entries)
+    all_entries = wu.reassign_orders(all_entries)
     all_entries = wu.reassign_uids(all_entries)
 
     for e in all_entries:
@@ -269,17 +269,13 @@ def _create_supplement_wrapper(entries: list[dict], wrapper_name: str) -> list[d
     return [open_entry, close_entry]
 
 
-def _reassign_orders(entries: list[dict]) -> list[dict]:
-    for i, e in enumerate(entries):
-        e["order"] = i
-    return entries
-
-
 def _prune_empty(entries: list[dict]) -> list[dict]:
     all_entries = list(entries)
     to_remove = set()
 
     boundary_indices = [i for i, e in enumerate(all_entries) if e.get("_is_boundary_copy")]
+    # 同 position 内栈式配对保证输出顺序为 开1,闭1,开2,闭2,...
+    # 因此 boundary_indices 成对相邻出现
     i = 0
     while i < len(boundary_indices):
         open_idx = boundary_indices[i]

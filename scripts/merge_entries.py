@@ -41,7 +41,7 @@ def run(input_path: str, output_path: str | None = None) -> str:
 
     all_entries = merged + [dict(e) for e in non_mergeable]
     all_entries.sort(key=lambda x: x.get("order", 100))
-    all_entries = _reassign_orders(all_entries)
+    all_entries = wu.reassign_orders(all_entries)
     all_entries = wu.reassign_uids(all_entries)
 
     for e in all_entries:
@@ -54,15 +54,11 @@ def run(input_path: str, output_path: str | None = None) -> str:
     return output_path
 
 
-def _reassign_orders(entries: list[dict]) -> list[dict]:
-    for i, e in enumerate(entries):
-        e["order"] = i
-    return entries
-
-
 def _is_mergeable_static(entry: dict) -> bool:
     content = entry.get("content", "")
     comment = entry.get("comment", "")
+    if entry.get("position") == 7:
+        return False
     if "[boundary-copy-" in comment:
         return False
     if "[supplement-" in comment:

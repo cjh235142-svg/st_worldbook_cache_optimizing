@@ -104,7 +104,7 @@ def _detect_split_boundaries(content: str, compound_ranges: list | None) -> list
         sl = seg["start_line"]
         el = seg["end_line"]
         if wu._is_line_in_ranges(sl, all_ranges) or wu._is_line_in_ranges(el, all_ranges):
-            if sl == el and all(wu._is_line_in_ranges(sl, all_ranges) for _ in [sl]):
+            if sl == el and wu._is_line_in_ranges(sl, all_ranges):
                 seg_text = "".join(lines[sl:el+1])
                 is_dyn = len(wu.detect_markers(seg_text)) > 0
                 boundaries.append({
