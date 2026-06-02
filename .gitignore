@@ -1,3 +1,8 @@
 scripts/__pycache__/*
 scripts/tests/__pycache__/*
 scripts/tools/__pycache__/*
+scripts/tests/fixtures/*.backup_*
+scripts/tests/fixtures/*_analysis.json
+scripts/tests/fixtures/*_split.json
+scripts/tests/fixtures/*_reordered.json
+scripts/tests/fixtures/*_merged.json

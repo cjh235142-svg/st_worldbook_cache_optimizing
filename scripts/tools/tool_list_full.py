@@ -27,6 +27,8 @@ def run(
 
     if filter_type == "static":
         entries = [e for e in entries if e["_is_static"]]
+    elif filter_type == "static-content":
+        entries = [e for e in entries if e["_is_static"]]
     elif filter_type == "dynamic":
         entries = [e for e in entries if not e["_is_static"]]
 

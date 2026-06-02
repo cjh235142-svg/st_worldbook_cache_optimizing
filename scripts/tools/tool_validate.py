@@ -31,6 +31,11 @@ def run(input_path: str, output_errors: str | None = None,
              "uid": None, "message": f"File not found: {input_path}"}
         errors.append(e)
         return _build_result(src.name, errors, warnings)
+    except json.JSONDecodeError as ex:
+        e = {"code": "A1", "level": "error", "scope": "file",
+             "uid": None, "message": f"Invalid JSON: {ex}"}
+        errors.append(e)
+        return _build_result(src.name, errors, warnings)
 
     entries_data = wb.get("entries", {})
     if not isinstance(entries_data, dict):
@@ -39,6 +44,8 @@ def run(input_path: str, output_errors: str | None = None,
         return _build_result(src.name, errors, warnings)
 
     entries = [(k, e) for k, e in entries_data.items()]
+
+    _check_cache_rules._orders = {}
 
     for key, entry in entries:
         uid = entry.get("uid")
@@ -49,6 +56,14 @@ def run(input_path: str, output_errors: str | None = None,
         if "content" not in entry:
             errors.append({"code": "A4", "level": "error", "scope": "entry",
                             "uid": uid, "message": "content field missing"})
+        else:
+            content = entry.get("content", "")
+            clean = re.sub(r"</?[\u4e00-\u9fff\w]+>", "", content)
+            clean = re.sub(r"^#{1,2}\s.*$", "", clean, flags=re.MULTILINE)
+            if clean.strip() == "" and content.strip():
+                warnings.append({"code": "D1", "level": "warning", "scope": "entry",
+                                  "uid": uid,
+                                  "message": "content only contains heading/tag, no body text"})
         if strict:
             _check_cache_rules(entry, uid, warnings)
 
@@ -107,23 +122,67 @@ def _check_ejs_integrity(content, uid, errors):
 
 
 def _check_xml_tags(content, uid, errors):
-    scope = "assembled" if uid is None else "entry"
+    is_global = uid is None
+    scope = "assembled" if is_global else "entry"
+    code_unclosed = "C4" if is_global else "C1"
+    code_no_open = "C5" if is_global else "C2"
+    code_cross = "C3"
+
     open_tags = [t for t in re.findall(r"<([\u4e00-\u9fff\w]+)>", content)
                  if t not in _FALSE_POSITIVE_TAGS]
     close_tags = [t for t in re.findall(r"</([\u4e00-\u9fff\w]+)>", content)
-                  if t not in _FALSE_POSITIVE_TAGS]
+                   if t not in _FALSE_POSITIVE_TAGS]
 
     from collections import Counter
     oc = Counter(open_tags)
     cc = Counter(close_tags)
     for tag in oc:
         if oc[tag] > cc.get(tag, 0):
-            errors.append({"code": "C1", "level": "error", "scope": scope,
+            errors.append({"code": code_unclosed, "level": "error", "scope": scope,
                             "uid": uid, "message": f"XML tag <{tag}> unclosed"})
     for tag in cc:
         if cc[tag] > oc.get(tag, 0):
-            errors.append({"code": "C2", "level": "error", "scope": scope,
+            errors.append({"code": code_no_open, "level": "error", "scope": scope,
                             "uid": uid, "message": f"XML tag </{tag}> has no open"})
+
+    _tag_re = re.compile(r"<(/?)([\u4e00-\u9fff\w]+)>")
+    stack = []
+    pos = 0
+    while pos < len(content):
+        m = _tag_re.search(content, pos)
+        if not m:
+            break
+        is_close = bool(m.group(1))
+        tag = m.group(2)
+        if tag in _FALSE_POSITIVE_TAGS:
+            pos = m.end()
+            continue
+        if not is_close:
+            stack.append((tag, m.start()))
+        else:
+            found = None
+            for i in range(len(stack) - 1, -1, -1):
+                if stack[i][0] == tag:
+                    found = i
+                    break
+            if found is not None:
+                for j in range(len(stack) - 1, found, -1):
+                    line_no = content[:stack[j][1]].count("\n") + 1
+                    errors.append({"code": code_cross, "level": "error", "scope": scope,
+                                    "uid": uid,
+                                    "message": f"XML tag crossing: <{stack[j][0]}> not closed "
+                                               f"before </{tag}> near line {line_no}"})
+                stack.pop(found)
+            else:
+                errors.append({"code": code_no_open, "level": "error", "scope": scope,
+                                "uid": uid, "message": f"XML tag </{tag}> has no open"})
+        pos = m.end()
+
+    for tag, start_pos in stack:
+        line_no = content[:start_pos].count("\n") + 1
+        errors.append({"code": code_unclosed, "level": "error", "scope": scope,
+                        "uid": uid,
+                        "message": f"XML tag <{tag}> unclosed near line {line_no}"})
 
 
 def _check_macro_integrity(content, uid, warnings):
@@ -133,6 +192,12 @@ def _check_macro_integrity(content, uid, warnings):
     if opens != closes:
         warnings.append({"code": "E1", "level": "warning", "scope": scope,
                           "uid": uid, "message": f"Macro brace mismatch: opens={opens}, closes={closes}"})
+    for m in re.finditer(r"<%[-=](.*?)%>", content, re.DOTALL):
+        ejs_body = m.group(1)
+        if "{{" in ejs_body:
+            warnings.append({"code": "E2", "level": "warning", "scope": scope,
+                              "uid": uid,
+                              "message": f"EJS output block contains nested macro: {m.group(0)[:60]}"})
 
 
 def _check_cache_rules(entry, uid, warnings):
@@ -163,8 +228,6 @@ def _check_cache_rules(entry, uid, warnings):
     depth = entry.get("depth")
     if order is not None:
         group_key = (pos, depth)
-        if not hasattr(_check_cache_rules, "_orders"):
-            _check_cache_rules._orders = {}
         if group_key not in _check_cache_rules._orders:
             _check_cache_rules._orders[group_key] = {}
         if order in _check_cache_rules._orders[group_key]:

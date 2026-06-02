@@ -203,7 +203,18 @@ def _detect_wrapper_style(entries: list[dict]) -> str:
 
 def _is_existing_supplement(entry: dict, wrapper_name: str) -> bool:
     comment = entry.get("comment", "")
-    return "[supplement-" in comment
+    if "[supplement-" in comment:
+        return True
+    content = entry.get("content", "").strip()
+    key = entry.get("key", [])
+    if key == ["/.*/"]:
+        open_pattern = f"<{wrapper_name}>"
+        close_pattern = f"</{wrapper_name}>"
+        md_start = f"# {wrapper_name}开始"
+        md_end = f"# {wrapper_name}结束"
+        if content in (open_pattern, close_pattern, md_start, md_end):
+            return True
+    return False
 
 
 def _create_supplement_wrapper(entries: list[dict], wrapper_name: str) -> list[dict]:
@@ -336,6 +347,9 @@ def _apply_rules(entry: dict) -> None:
                 entry["depth"] = 9999
             else:
                 entry["depth"] = 0
+            entry["role"] = 1
+        elif pos == 4:
+            entry["depth"] = 0
             entry["role"] = 1
     else:
         entry["position"] = 4
