@@ -96,3 +96,15 @@ class TestAnalyzeBackup:
         out = analyze_run(test_inp, str(tmp_path / "out.json"))
         backups = list(Path(tmp_path).glob("test_static.backup_*"))
         assert len(backups) >= 1
+
+
+class TestWrapTag:
+    def test_wrap_tag_in_boundaries(self, fixtures_dir, tmp_path):
+        inp = str(fixtures_dir / "closed_tag_split.json")
+        out = analyze_run(inp, str(tmp_path / "out.json"))
+        with open(out, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        boundaries = d["entries"][0].get("split_boundaries", [])
+        assert len(boundaries) >= 2
+        assert any(b.get("wrap_tag") == "A" and b["start_line"] == 0 for b in boundaries)
+        assert any(b.get("wrap_tag") is None for b in boundaries)

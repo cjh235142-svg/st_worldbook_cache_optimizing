@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -95,6 +96,9 @@ def _detect_split_boundaries(content: str, compound_ranges: list | None) -> list
     compound_ranges = compound_ranges or []
     all_ranges = list(compound_ranges)
 
+    outermost_tag = wu.find_outermost_xml_tag(content)
+    close_lines = _find_all_close_lines(content)
+
     boundaries = []
     for seg in headings:
         sl = seg["start_line"]
@@ -132,11 +136,58 @@ def _detect_split_boundaries(content: str, compound_ranges: list | None) -> list
                 "is_dynamic": is_dyn,
             })
 
+    if close_lines:
+        boundaries = _split_at_close_lines(boundaries, close_lines)
+    _assign_wrap_tags(boundaries, outermost_tag, close_lines[-1] if close_lines else None)
+
     is_dynamic_values = {b["is_dynamic"] for b in boundaries}
     if not boundaries or len(is_dynamic_values) <= 1:
         return None
 
     return boundaries
+
+
+def _find_all_close_lines(content: str) -> list[int]:
+    all_tags = wu.find_xml_tags(content)
+    if not all_tags:
+        return []
+    close_re = re.compile(r"^\s*</([\u4e00-\u9fff\w]+)>\s*$")
+    result = []
+    seen = set()
+    for i, line in enumerate(content.splitlines(keepends=True)):
+        m = close_re.match(line)
+        if m and m.group(1) in {t["tag"] for t in all_tags} and i not in seen:
+            result.append(i)
+            seen.add(i)
+    return sorted(result)
+
+
+def _split_at_close_lines(boundaries: list[dict], close_lines: list[int]) -> list[dict]:
+    for line_no in close_lines:
+        new_boundaries = []
+        for b in boundaries:
+            sl, el = b["start_line"], b["end_line"]
+            if sl <= line_no < el:
+                new_boundaries.append({
+                    **{k: v for k, v in b.items()},
+                    "end_line": line_no,
+                })
+                new_boundaries.append({
+                    **{k: v for k, v in b.items()},
+                    "start_line": line_no + 1,
+                })
+            else:
+                new_boundaries.append(b)
+        boundaries = new_boundaries
+    return boundaries
+
+
+def _assign_wrap_tags(boundaries: list[dict], tag: str | None, close_line: int | None) -> None:
+    for b in boundaries:
+        if tag and close_line is not None and b["start_line"] > close_line:
+            b["wrap_tag"] = None
+        else:
+            b["wrap_tag"] = tag
 
 
 if __name__ == "__main__":

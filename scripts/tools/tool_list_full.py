@@ -18,6 +18,12 @@ def run(
 
     for e in entries:
         e["_is_static"] = determine_static(e.get("content", ""))
+        comment = e.get("comment", "")
+        key = e.get("key", [])
+        is_boundary_or_supp = "[boundary-copy-" in comment or "[supplement-" in comment
+        is_wildcard = key == ["/.*/"]
+        if is_boundary_or_supp or is_wildcard:
+            e["_is_static"] = False
 
     if filter_type == "static":
         entries = [e for e in entries if e["_is_static"]]

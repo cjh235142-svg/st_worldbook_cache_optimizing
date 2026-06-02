@@ -137,3 +137,35 @@ class TestSplit:
                     pass
             assert all(oc[t] == cc.get(t, 0) for t in oc | cc), \
                 f"Tag mismatch in {e.get('comment','')}: opens={dict(oc)}, closes={dict(cc)}"
+
+    def test_closed_tag_split(self, fixtures_dir, tmp_path):
+        inp = str(fixtures_dir / "closed_tag_split.json")
+        a = analyze_run(inp, str(tmp_path / "a.json"))
+        out = split_run(inp, a, str(tmp_path / "out.json"))
+        wb = wu.load_world_book(out)
+        entries = list(wb["entries"].values())
+        static_entry = [e for e in entries if "[split-static]" in e.get("comment", "")]
+        dynamic_entry = [e for e in entries if "[split-dynamic]" in e.get("comment", "")]
+        assert len(static_entry) == 1
+        assert len(dynamic_entry) == 1
+        se = static_entry[0]["content"]
+        de = dynamic_entry[0]["content"]
+        assert "<A>" in se and "</A>" in se
+        assert "<A>" in de and "</A>" in de
+        assert "额外静态内容" in se or "额外动态" in de
+
+    def test_wrap_tag_metadata(self, fixtures_dir, tmp_path):
+        inp = str(fixtures_dir / "closed_tag_split.json")
+        a = analyze_run(inp, str(tmp_path / "a.json"))
+        out = split_run(inp, a, str(tmp_path / "out.json"))
+        wb = wu.load_world_book(out)
+        entries = list(wb["entries"].values())
+        for e in entries:
+            content = e.get("content", "")
+            tags = re.findall(r"<([\u4e00-\u9fff\w]+)>", content)
+            closes = re.findall(r"</([\u4e00-\u9fff\w]+)>", content)
+            from collections import Counter
+            oc = Counter(tags)
+            cc = Counter(closes)
+            assert all(oc[t] == cc.get(t, 0) for t in oc | cc), \
+                f"Tag mismatch in {e.get('comment','')}: opens={dict(oc)}, closes={dict(cc)}"

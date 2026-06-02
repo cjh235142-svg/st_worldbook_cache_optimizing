@@ -41,32 +41,26 @@ def run(world_book_path: str, analysis_path: str, output_path: str | None = None
 
         content = entry.get("content", "")
         lines = content.splitlines(keepends=True)
-        outermost_tag = wu.find_outermost_xml_tag(content)
 
-        static_segments = []
-        dynamic_segments = []
+        static_boundaries = []
+        dynamic_boundaries = []
 
         for b in boundaries:
             sl, el = b["start_line"], b["end_line"]
             segment = "".join(lines[sl:el+1])
             if wu._is_empty_or_heading_only(segment):
                 continue
-            if outermost_tag:
-                segment = _strip_tag_edges(segment, outermost_tag)
             if b["is_dynamic"]:
-                dynamic_segments.append(segment)
+                dynamic_boundaries.append((segment, b))
             else:
-                static_segments.append(segment)
+                static_boundaries.append((segment, b))
+
+        static_segments = [s for s, _ in static_boundaries]
+        dynamic_segments = [s for s, _ in dynamic_boundaries]
 
         if not static_segments or not dynamic_segments:
             new_entries.append(dict(entry))
             continue
-
-        def _wrap(segments, tag):
-            body = "\n\n".join(segments)
-            if tag:
-                return f"<{tag}>\n{body}\n</{tag}>"
-            return body
 
         base = {k: v for k, v in entry.items()
                 if k not in ("uid", "content", "comment")}
@@ -74,12 +68,12 @@ def run(world_book_path: str, analysis_path: str, output_path: str | None = None
 
         se = dict(base)
         se["uid"] = None
-        se["content"] = _wrap(static_segments, outermost_tag)
+        se["content"] = _build_content(static_boundaries)
         se["comment"] = f"{entry.get('comment','')} [split-static]".strip()
 
         de = dict(base)
         de["uid"] = None
-        de["content"] = _wrap(dynamic_segments, outermost_tag)
+        de["content"] = _build_content(dynamic_boundaries)
         de["comment"] = f"{entry.get('comment','')} [split-dynamic]".strip()
 
         new_entries.extend([se, de])
@@ -89,13 +83,29 @@ def run(world_book_path: str, analysis_path: str, output_path: str | None = None
     return output_path
 
 
-_XML_TAG_RE = re.compile(r"<([\u4e00-\u9fff\w]+)>")
+def _build_content(boundaries: list[tuple[str, dict]]) -> str:
+    wrapped = []
+    unwrapped = []
+    for segment, b in boundaries:
+        tag = b.get("wrap_tag")
+        s = _strip_all_standalone_tag_lines(segment)
+        if tag:
+            wrapped.append(f"<{tag}>\n{s}\n</{tag}>")
+        else:
+            unwrapped.append(s)
+    parts = []
+    if wrapped:
+        parts.append("\n\n".join(wrapped))
+    if unwrapped:
+        parts.append("\n\n".join(unwrapped))
+    return "\n\n".join(parts)
 
 
-def _strip_tag_edges(segment: str, tag: str) -> str:
-    s = re.sub(rf"^<{re.escape(tag)}>\s*", "", segment)
-    s = re.sub(rf"\s*</{re.escape(tag)}>\s*$", "", s)
-    return s
+_XML_TAG_LINE_RE = re.compile(r"^\s*</?[\u4e00-\u9fff\w]+>\s*$\n?", flags=re.MULTILINE)
+
+
+def _strip_all_standalone_tag_lines(segment: str) -> str:
+    return _XML_TAG_LINE_RE.sub("", segment)
 
 
 if __name__ == "__main__":

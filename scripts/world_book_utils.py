@@ -304,7 +304,7 @@ def split_by_headings(content: str) -> list[dict]:
 
 
 def _is_empty_or_heading_only(segment: str) -> bool:
-    clean = re.sub(r"<[^>]+>", "", segment)
+    clean = re.sub(r"</?[\u4e00-\u9fff\w]+>", "", segment)
     clean = re.sub(r"^#{1,2}\s.*$", "", clean, flags=re.MULTILINE)
     clean = clean.strip()
     return clean == ""
