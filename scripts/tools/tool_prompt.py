@@ -176,14 +176,14 @@ def _parse_chat_history(path: str) -> list[dict]:
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--input", required=True)
+    p.add_argument("-i", "--input", required=True)
     p.add_argument("--system-prompt", default=None)
     p.add_argument("--character", default=None)
     p.add_argument("--persona", default=None)
     p.add_argument("--scenario", default=None)
     p.add_argument("--chat-history", default=None)
-    p.add_argument("--output", default=None)
-    p.add_argument("--no-comments", action="store_true")
+    p.add_argument("-o", "--output", default=None)
+    p.add_argument("-C", "--no-comments", action="store_true")
     args = p.parse_args()
     print(run(
         args.input, args.system_prompt, args.character,

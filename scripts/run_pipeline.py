@@ -38,8 +38,8 @@ def run(input_path: str, output_dir: str | None = None,
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser(description="World book cache optimization pipeline")
-    p.add_argument("--input", required=True, help="Input world book JSON")
-    p.add_argument("--output-dir", default=None, help="Output directory")
-    p.add_argument("--wrapper-name", default="补充内容", help="Wrapper content name")
+    p.add_argument("-i", "--input", required=True, help="Input world book JSON")
+    p.add_argument("-d", "--output-dir", default=None, help="Output directory")
+    p.add_argument("-w", "--wrapper-name", default="补充内容", help="Wrapper content name")
     args = p.parse_args()
     run(args.input, args.output_dir, args.wrapper_name)

@@ -305,7 +305,7 @@ def _print_result(result):
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--input", required=True)
+    p.add_argument("-i", "--input", required=True)
     p.add_argument("--output-errors", default=None)
     p.add_argument("--strict", action="store_true")
     args = p.parse_args()

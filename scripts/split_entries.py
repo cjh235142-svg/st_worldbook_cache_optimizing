@@ -111,9 +111,9 @@ def _strip_all_standalone_tag_lines(segment: str) -> str:
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--world-book", required=True)
-    p.add_argument("--analysis", required=True)
-    p.add_argument("--output", default=None)
+    p.add_argument("-i", "--input", dest="world_book", required=True)
+    p.add_argument("-a", "--analysis", required=True)
+    p.add_argument("-o", "--output", default=None)
     args = p.parse_args()
     out = run(args.world_book, args.analysis, args.output)
     print(f"Split world book written to: {out}")

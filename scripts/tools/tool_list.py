@@ -54,7 +54,7 @@ def run(input_path: str, fmt: str = "table", filter_type: str | None = None) -> 
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--input", required=True)
+    p.add_argument("-i", "--input", required=True)
     p.add_argument("--csv", action="store_true")
     p.add_argument("--filter", default=None, choices=["static", "dynamic"])
     args = p.parse_args()

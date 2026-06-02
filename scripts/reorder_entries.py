@@ -356,9 +356,9 @@ def _apply_rules(entry: dict) -> None:
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--input", required=True)
-    p.add_argument("--output", default=None)
-    p.add_argument("--wrapper-name", default="补充内容")
+    p.add_argument("-i", "--input", required=True)
+    p.add_argument("-o", "--output", default=None)
+    p.add_argument("-w", "--wrapper-name", default="补充内容")
     args = p.parse_args()
     out = run(args.input, args.output, args.wrapper_name)
     print(f"Reordered world book written to: {out}")
