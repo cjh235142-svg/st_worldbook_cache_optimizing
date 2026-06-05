@@ -181,6 +181,45 @@ class TestBoundaryPairs:
         assert len(copies) == 0
 
 
+class TestNestedBoundaryPrune:
+    def test_nested_boundary_with_dynamic_all_kept(self, fixtures_dir, tmp_path):
+        inp = str(fixtures_dir / "boundary_nested_with_dynamic.json")
+        out = str(tmp_path / "out.json")
+        reorder_run(inp, out)
+        wb = wu.load_world_book(out)
+        copies = [e for e in wb["entries"].values()
+                   if "[boundary-copy-" in e.get("comment", "")]
+        assert len(copies) == 4, \
+            f"Nested boundaries with inner dynamic should keep 4 copies, got {len(copies)}"
+        comments = sorted(e["comment"] for e in copies)
+        assert any("boundary-copy-open" in c for c in comments)
+        assert any("boundary-copy-close" in c for c in comments)
+
+    def test_nested_boundary_no_dynamic_all_removed(self, fixtures_dir, tmp_path):
+        inp = str(fixtures_dir / "boundary_nested.json")
+        out = str(tmp_path / "out.json")
+        reorder_run(inp, out)
+        wb = wu.load_world_book(out)
+        copies = [e for e in wb["entries"].values()
+                   if "[boundary-copy-" in e.get("comment", "")]
+        assert len(copies) == 0, \
+            "Nested boundaries with no dynamic should have 0 copies"
+
+    def test_nested_boundary_inner_only_dynamic(self, fixtures_dir, tmp_path):
+        inp = str(fixtures_dir / "boundary_nested_with_dynamic.json")
+        out = str(tmp_path / "out.json")
+        reorder_run(inp, out)
+        wb = wu.load_world_book(out)
+        # With my fix: Pair A has dynamic between 10-40 (B开, dynamic, B闭 are in between)
+        # Pair B has dynamic between 20-30 (just the dynamic entry)
+        # Both pairs should have copies
+        copies = [e for e in wb["entries"].values()
+                   if "[boundary-copy-" in e.get("comment", "")]
+        # This tests that copies are NOT erroneously deleted due to wrong pairing
+        assert len(copies) >= 2, \
+            "Inner-only dynamic should keep at least inner pair's copies"
+
+
 class TestSupplementWrapper:
     def test_supplement_created_with_dynamic(self, fixtures_dir, tmp_path):
         inp = str(fixtures_dir / "small_world_book.json")
@@ -232,3 +271,54 @@ class TestDepthHandling:
         for e in wb["entries"].values():
             if e.get("comment") == "depth_null":
                 assert e["constant"] is True
+
+
+class TestXmlBoundaryMatch:
+    def test_inline_tag_not_boundary(self):
+        from scripts.reorder_entries import _detect_xml_boundary_simple
+        r = _detect_xml_boundary_simple("关于<暗部>的描述")
+        assert r is None, "Inline tag should NOT be detected as XML boundary"
+
+    def test_tag_at_start_is_boundary(self):
+        from scripts.reorder_entries import _detect_xml_boundary_simple
+        r = _detect_xml_boundary_simple("<暗部>")
+        assert r is not None
+        assert r[0] == "xml_open"
+        assert r[1] == "暗部"
+
+    def test_closing_tag_at_start_is_boundary(self):
+        from scripts.reorder_entries import _detect_xml_boundary_simple
+        r = _detect_xml_boundary_simple("</暗部>")
+        assert r is not None
+        assert r[0] == "xml_close"
+
+    def test_leading_whitespace_tag_at_start(self):
+        from scripts.reorder_entries import _detect_xml_boundary_simple
+        r = _detect_xml_boundary_simple("  <暗部>")
+        assert r is not None, "Tag after whitespace should be detected (strip before match)"
+
+
+class TestOutletApplyRules:
+    def test_outlet_skip_apply_rules(self, fixtures_dir, tmp_path):
+        from scripts.reorder_entries import _apply_rules
+        entry = {"position": 7, "content": "{{getvar::x}}",
+                 "comment": "outlet", "constant": False,
+                 "_is_static": False,
+                 "_is_boundary_copy": False, "_is_supplement": False}
+        original = dict(entry)
+        _apply_rules(entry)
+        for k in ("position", "content", "constant", "depth", "role"):
+            assert entry.get(k) == original.get(k), \
+                f"outlet field '{k}' should not be modified by _apply_rules ({original.get(k)} vs {entry.get(k)})"
+
+
+class TestSupplementExisting:
+    def test_exact_comment_matches(self):
+        from scripts.reorder_entries import _is_existing_supplement
+        entry = {"comment": "[supplement-start]", "content": "<补充内容>", "key": ["/.*/"]}
+        assert _is_existing_supplement(entry, "补充内容") is True
+
+    def test_broad_comment_not_matched(self):
+        from scripts.reorder_entries import _is_existing_supplement
+        entry = {"comment": "[supplement-custom]", "content": "some content", "key": []}
+        assert _is_existing_supplement(entry, "补充内容") is False

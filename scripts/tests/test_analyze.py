@@ -87,15 +87,62 @@ class TestAnalyzeEmpty:
         assert d["summary"]["total"] == 0
 
 
-class TestAnalyzeBackup:
-    def test_backup_created(self, fixtures_dir, tmp_path):
-        import shutil
+class TestUnclosedEjs:
+    def test_unclosed_mixed_not_splittable(self, fixtures_dir, tmp_path):
+        import shutil, json
         src = str(fixtures_dir / "static_entry.json")
-        test_inp = str(tmp_path / "test_static.json")
-        shutil.copy2(src, test_inp)
+        test_inp = str(tmp_path / "test_unclosed.json")
+        with open(src) as f:
+            wb = json.load(f)
+        wb["entries"]["0"]["content"] = (
+            "## 静态标题\n静态内容\n"
+            "<% if (x) { %>\n动态内容<% getvar('y') %>"
+        )
+        with open(test_inp, "w") as f:
+            json.dump(wb, f)
         out = analyze_run(test_inp, str(tmp_path / "out.json"))
-        backups = list(Path(tmp_path).glob("test_static.backup_*"))
-        assert len(backups) >= 1
+        with open(out) as f:
+            d = json.load(f)
+        e = d["entries"][0]
+        assert e["suggested_split"] is False, \
+            "Unclosed EJS with mixed content should not be suggested for split"
+
+    def test_unclosed_all_dynamic(self, fixtures_dir, tmp_path):
+        import shutil, json
+        src = str(fixtures_dir / "static_entry.json")
+        test_inp = str(tmp_path / "test_unclosed_all.json")
+        with open(src) as f:
+            wb = json.load(f)
+        wb["entries"]["0"]["content"] = "<% if (x) { %>\n<%- getvar('y') %>"
+        with open(test_inp, "w") as f:
+            json.dump(wb, f)
+        out = analyze_run(test_inp, str(tmp_path / "out.json"))
+        with open(out) as f:
+            d = json.load(f)
+        e = d["entries"][0]
+        assert e["is_static"] is False
+        assert e["is_mixed"] is False
+
+    def test_closed_mixed_still_splittable(self, fixtures_dir, tmp_path):
+        inp = str(fixtures_dir / "mixed_entry.json")
+        out = analyze_run(inp, str(tmp_path / "out.json"))
+        with open(out) as f:
+            d = json.load(f)
+        e = d["entries"][0]
+        assert e["is_mixed"] is True
+        assert e["suggested_split"] is True
+
+
+class TestSuggestedSplitConsistency:
+    def test_no_contradictory_suggested_split(self, fixtures_dir, tmp_path):
+        inp = str(fixtures_dir / "small_world_book.json")
+        out = analyze_run(inp, str(tmp_path / "out.json"))
+        with open(out) as f:
+            d = json.load(f)
+        for e in d["entries"]:
+            if e["suggested_split"]:
+                assert e["split_boundaries"] is not None, \
+                    f"uid={e['uid']}: suggested_split=true but split_boundaries=null"
 
 
 class TestWrapTag:

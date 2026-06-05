@@ -307,6 +307,23 @@ class TestFindEjsCompoundRanges:
         assert ranges == []
 
 
+class TestIsEjsUnclosed:
+    def test_simple_if_else_closed(self):
+        assert wu.is_ejs_unclosed("<% if (x) { %>a<% } else { %>b<% } %>") is False
+
+    def test_nested_closed(self):
+        assert wu.is_ejs_unclosed("<% if (a) { %><% for(b) { %>x<% } %><% } %>") is False
+
+    def test_no_ejs(self):
+        assert wu.is_ejs_unclosed("## 标题\n普通文本") is False
+
+    def test_unclosed_if(self):
+        assert wu.is_ejs_unclosed("<% if (x) { %>a<% getvar('y') %>") is True
+
+    def test_unclosed_for(self):
+        assert wu.is_ejs_unclosed("<% for(i=0;i<n;i++) { %>a") is True
+
+
 class TestIsOutletEntry:
     def test_outlet_pos(self):
         assert wu.is_outlet_entry({"position": 7}) is True

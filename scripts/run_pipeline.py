@@ -7,6 +7,25 @@ from . import world_book_utils as wu
 
 def run(input_path: str, output_dir: str | None = None,
         wrapper_name: str = "补充内容") -> str:
+    """一键执行完整优化管线：分析 → 拆分 → 重排序 → 合并。
+
+    四步串联执行，每步输出到指定目录或输入文件所在目录。
+    仅在输入为原始世界书（非管线中间产物）时创建备份。
+
+    Args:
+        input_path: 原始世界书 JSON 路径。
+        output_dir: 输出目录。None 时使用输入文件所在目录。
+        wrapper_name: 补充包裹的名称（默认"补充内容"）。
+
+    Returns:
+        最终产物 `_merged.json` 的路径。
+
+    Notes:
+        每个步骤的输出独立保存，便于分步调试。
+        仅备份原始文件，不备份管线中间产物。
+    """
+    assert input_path is not None
+    assert Path(input_path).exists()
     src = Path(input_path).resolve()
     out_dir = Path(output_dir) if output_dir else src.parent
     out_dir.mkdir(parents=True, exist_ok=True)

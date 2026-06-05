@@ -7,6 +7,27 @@ from . import world_book_utils as wu
 
 
 def run(input_path: str, output_path: str | None = None) -> str:
+    """执行条目分析：遍历世界书条目，判定三态并检测拆分边界。
+
+    处理流程：
+    1. 加载世界书 JSON
+    2. 遍历每条 entry，调用 classify_entry 判定 is_static/is_mixed
+    3. 对混合条目检测拆分边界（基于 Markdown 标题和 XML 闭标签）
+    4. 输出分析 JSON（含 suggested_split、split_boundaries 等）
+
+    Args:
+        input_path: 世界书 JSON 文件路径。
+        output_path: 输出路径，None 时自动生成为 {原名}_analysis.json。
+
+    Returns:
+        分析结果 JSON 文件的路径。
+
+    Notes:
+        备份由 run_pipeline.py 在入口统一执行，本函数不自备份。
+        不修改原始世界书文件。
+    """
+    assert input_path is not None
+    assert Path(input_path).exists()
     input_path = str(Path(input_path).resolve())
     src = Path(input_path)
     if output_path is None:
@@ -31,7 +52,7 @@ def run(input_path: str, output_path: str | None = None) -> str:
         uid = entry.get("uid", int(key) if key.isdigit() else 0)
         comment = entry.get("comment", "")
         content = entry.get("content", "")
-        is_outlet = entry.get("position") == 7
+        is_outlet = wu.is_outlet_entry(entry)
         has_plugin = wu.has_special_plugin(content, comment)
 
         is_static, is_mixed = wu.classify_entry(content)
@@ -53,7 +74,12 @@ def run(input_path: str, output_path: str | None = None) -> str:
         ejs_ranges = wu.find_ejs_compound_ranges(content) if is_mixed else None
         boundaries = None
         if is_mixed and suggested_split:
-            boundaries = _detect_split_boundaries(content, ejs_ranges)
+            if wu.is_ejs_unclosed(content):
+                suggested_split = False
+            else:
+                boundaries = _detect_split_boundaries(content, ejs_ranges)
+                if boundaries is None:
+                    suggested_split = False
 
         analysis_entries.append({
             "uid": uid,
@@ -85,6 +111,23 @@ def run(input_path: str, output_path: str | None = None) -> str:
 
 
 def _detect_split_boundaries(content: str, compound_ranges: list | None) -> list[dict] | None:
+    """检测混合条目的拆分边界。
+
+    以 Markdown 标题（#/##）作为候选边界，过滤被 EJS 复合块
+    覆盖的段落，再在 XML 闭标签处二次切分，最后分配 wrap_tag。
+
+    Args:
+        content: 条目的 content 文本。
+        compound_ranges: EJS 复合块的行范围，为 None 时视为空。
+
+    Returns:
+        list[dict] 每个段落的信息（type/start_line/end_line/is_dynamic/wrap_tag），
+        若无可拆分边界返回 None。
+
+    Notes:
+        wrap_tag 根据 outermost_tag 分配，闭标签之后的段落不包裹。
+    """
+    assert isinstance(content, str)
     lines = content.splitlines(keepends=True)
     headings = wu.split_by_headings(content)
     compound_ranges = compound_ranges or []
@@ -142,6 +185,21 @@ def _detect_split_boundaries(content: str, compound_ranges: list | None) -> list
 
 
 def _find_all_close_lines(content: str) -> list[int]:
+    """扫描 content 中所有独立成行的闭标签行号。
+
+    仅匹配整行仅含 </tagname>（前后可有空白）的闭标签。
+    用于将已按 heading 切好的段落在此处再次切分。
+
+    Args:
+        content: 条目 content 文本。
+
+    Returns:
+        闭标签行号列表（0-based，递增排序）。
+
+    Notes:
+        仅匹配已在 find_xml_tags 中识别出的标签的闭标签。
+    """
+    assert isinstance(content, str)
     all_tags = wu.find_xml_tags(content)
     if not all_tags:
         return []
@@ -157,6 +215,23 @@ def _find_all_close_lines(content: str) -> list[int]:
 
 
 def _split_at_close_lines(boundaries: list[dict], close_lines: list[int]) -> list[dict]:
+    """在闭标签行处切分已有边界段落。
+
+    遍历闭标签行号，对包含该行的段落一分为二。
+    支持递归嵌套：多个闭标签行依次处理。
+
+    Args:
+        boundaries: _detect_split_boundaries 输出的边界列表。
+        close_lines: _find_all_close_lines 输出的闭标签行号。
+
+    Returns:
+        切分后的新边界列表。
+
+    Notes:
+        不修改输入列表，返回新列表。
+    """
+    assert isinstance(boundaries, list)
+    assert isinstance(close_lines, list)
     for line_no in close_lines:
         new_boundaries = []
         for b in boundaries:
@@ -177,6 +252,21 @@ def _split_at_close_lines(boundaries: list[dict], close_lines: list[int]) -> lis
 
 
 def _assign_wrap_tags(boundaries: list[dict], tag: str | None, close_line: int | None) -> None:
+    """为每个边界段落分配 wrap_tag。
+
+    闭标签行之后的段落 wrap_tag=None（不包裹最外层标签），
+    之前的段落 wrap_tag=tag（将被包裹在最外层标签内）。
+
+    Args:
+        boundaries: 边界列表（就地修改）。
+        tag: 最外层标签名，None 表示无标签。
+        close_line: 最后一个闭标签行号，None 表示无闭标签。
+
+    Notes:
+        就地修改 boundaries。
+        若 tag=None 或 close_line=None，所有段落 wrap_tag=tag（即 None）。
+    """
+    assert isinstance(boundaries, list)
     for b in boundaries:
         if tag and close_line is not None and b["start_line"] > close_line:
             b["wrap_tag"] = None
