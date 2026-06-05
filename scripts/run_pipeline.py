@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 from . import analyze_entries, split_entries, reorder_entries, merge_entries
+from . import world_book_utils as wu
 
 
 def run(input_path: str, output_dir: str | None = None,
@@ -9,6 +10,13 @@ def run(input_path: str, output_dir: str | None = None,
     src = Path(input_path).resolve()
     out_dir = Path(output_dir) if output_dir else src.parent
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    is_pipeline_product = any(
+        src.stem.endswith(suffix)
+        for suffix in ("_analysis", "_split", "_reordered", "_merged")
+    )
+    if not is_pipeline_product:
+        wu.backup_file(input_path)
 
     print(f"[1/4] Analyzing: {src.name}")
     analysis_path = analyze_entries.run(str(src),

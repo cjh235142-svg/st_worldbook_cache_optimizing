@@ -16,12 +16,6 @@ def run(input_path: str, output_path: str | None = None) -> str:
     wb = wu.load_world_book(input_path)
     ref_path = str(Path(input_path).resolve())
     src = Path(ref_path)
-    is_pipeline_product = any(
-        src.stem.endswith(suffix)
-        for suffix in ("_analysis", "_split", "_reordered", "_merged")
-    )
-    if not is_pipeline_product:
-        wu.backup_file(input_path)
 
     entries_data = wb.get("entries", {})
     if isinstance(entries_data, list):
