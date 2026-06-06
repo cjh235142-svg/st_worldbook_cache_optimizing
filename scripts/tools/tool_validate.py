@@ -298,11 +298,188 @@ def _print_result(result):
     print(f"{'='*60}")
 
 
+def _pipeline_check_single(entries: list[dict], source: str) -> dict:
+    """对单个产物文件执行管线完整性检查。"""
+    errors = []
+    warnings = []
+
+    if not entries:
+        errors.append({"code": "P0", "level": "error", "scope": "file",
+                        "uid": None, "message": "entries list is empty"})
+        return _build_result(source, errors, warnings)
+
+    orders = sorted(e.get("order", -1) for e in entries)
+    if orders[0] != 0 or orders[-1] != len(entries) - 1:
+        errors.append({"code": "P1", "level": "error", "scope": "file",
+                        "uid": None,
+                        "message": f"order not continuous: range {orders[0]}..{orders[-1]}, "
+                                   f"expected 0..{len(entries) - 1}"})
+    elif orders != list(range(len(entries))):
+        errors.append({"code": "P1", "level": "error", "scope": "file",
+                        "uid": None, "message": "order not continuous"})
+
+    uids = sorted(e.get("uid", -1) for e in entries)
+    if uids != list(range(len(entries))):
+        errors.append({"code": "P2", "level": "error", "scope": "file",
+                        "uid": None, "message": "uid not continuous"})
+
+    temp_fields = ['_is_static', '_original_order', '_is_boundary_copy', '_is_supplement', '_pair_id']
+    for e in entries:
+        for f in temp_fields:
+            if f in e:
+                warnings.append({"code": "P3", "level": "warning", "scope": "entry",
+                                  "uid": e.get("uid"),
+                                  "message": f"temporary field '{f}' found"})
+                break
+
+    static_max = -1
+    dynamic_min = len(entries)
+    for e in entries:
+        o = e.get("order", 0)
+        comment = e.get("comment", "")
+        if "[boundary-copy-" in comment or "[supplement-" in comment or not determine_static(e.get("content", "")):
+            if o < dynamic_min:
+                dynamic_min = o
+        else:
+            if o > static_max:
+                static_max = o
+    if static_max >= 0 and dynamic_min < len(entries) and static_max > dynamic_min:
+        errors.append({"code": "P5", "level": "error", "scope": "file",
+                        "uid": None,
+                        "message": f"static entries (max order={static_max}) after "
+                                   f"dynamic entries (min order={dynamic_min})"})
+
+    return _build_result(source, errors, warnings)
+
+
+def _pipeline_check_chain(pipeline_dir: str, pipeline_name: str) -> dict:
+    """对整套产物链执行完整性检查。"""
+    errors = []
+    warnings = []
+
+    dir_path = Path(pipeline_dir)
+    suffixes = ["_analysis", "_split", "_reordered", "_merged"]
+    files = {}
+    all_exist = True
+    for suf in suffixes:
+        f = dir_path / f"{pipeline_name}{suf}.json"
+        files[suf] = f
+        if not f.exists():
+            errors.append({"code": "C1", "level": "error", "scope": "file",
+                            "uid": None, "message": f"missing: {f.name}"})
+            all_exist = False
+
+    if not all_exist:
+        return _build_result(pipeline_name, errors, warnings)
+
+    entry_counts = {}
+    for suf in suffixes:
+        with open(files[suf]) as f:
+            data = json.load(f)
+        ed = data.get("entries", {})
+        if isinstance(ed, dict):
+            entry_counts[suf] = len(ed)
+        elif isinstance(ed, list):
+            entry_counts[suf] = len(ed)
+        else:
+            entry_counts[suf] = 0
+
+    if entry_counts["_split"] < entry_counts["_analysis"]:
+        warnings.append({"code": "C2", "level": "warning", "scope": "file",
+                          "uid": None,
+                          "message": f"split ({entry_counts['_split']}) < analysis "
+                                     f"({entry_counts['_analysis']})"})
+    if entry_counts["_reordered"] < entry_counts["_split"]:
+        warnings.append({"code": "C2", "level": "warning", "scope": "file",
+                          "uid": None,
+                          "message": f"reordered ({entry_counts['_reordered']}) < split "
+                                     f"({entry_counts['_split']})"})
+    if entry_counts["_merged"] > entry_counts["_reordered"]:
+        warnings.append({"code": "C2", "level": "warning", "scope": "file",
+                          "uid": None,
+                          "message": f"merged ({entry_counts['_merged']}) > reordered "
+                                     f"({entry_counts['_reordered']})"})
+
+    backups = list(dir_path.glob(f"{pipeline_name}.backup_*"))
+    if not backups:
+        warnings.append({"code": "C3", "level": "warning", "scope": "file",
+                          "uid": None, "message": "no backup file found"})
+
+    result = _build_result(pipeline_name, errors, warnings)
+    result["entry_counts"] = entry_counts
+    result["backups"] = [str(b.name) for b in backups]
+    return result
+
+
+def _print_pipeline_result(result: dict) -> None:
+    """打印管线检查结果。"""
+    source = result["source"]
+    entry_counts = result.get("entry_counts", {})
+    backups = result.get("backups", [])
+    errors = result["errors"]
+    warnings = result["warnings"]
+
+    print(f"{'=' * 60}")
+    print(f"  Pipeline check: {source}")
+    print(f"{'=' * 60}")
+
+    if entry_counts:
+        for suf in ["_analysis", "_split", "_reordered", "_merged"]:
+            cnt = entry_counts.get(suf, "?")
+            print(f"  {suf:15s}: {cnt} entries")
+        print()
+
+    if backups:
+        for b in backups:
+            print(f"  ✓ backup: {b}")
+        print()
+
+    if errors:
+        for e in errors:
+            print(f"  ✗ [{e['code']}] {e['message']}")
+    if warnings:
+        for w in warnings:
+            print(f"  ⚠ [{w['code']}] {w['message']}")
+
+    if not errors and not warnings:
+        print(f"  ✓ All checks passed")
+
+    print(f"\n{'─' * 60}")
+    print(f"  Result: {len(errors)} errors, {len(warnings)} warnings")
+    print(f"{'=' * 60}")
+
+
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("-i", "--input", required=True)
+    p.add_argument("-i", "--input", default=None,
+                   help="Single artifact JSON for pipeline-check")
+    p.add_argument("--pipeline-check", action="store_true",
+                   help="Enable pipeline integrity check for single file")
+    p.add_argument("--pipeline-dir", default=None,
+                   help="Directory containing pipeline artifacts")
+    p.add_argument("--pipeline-name", default=None,
+                   help="Pipeline artifact filename prefix")
     p.add_argument("--output-errors", default=None)
     p.add_argument("--strict", action="store_true")
     args = p.parse_args()
-    run(args.input, args.output_errors, args.strict)
+
+    if args.pipeline_dir and args.pipeline_name:
+        result = _pipeline_check_chain(args.pipeline_dir, args.pipeline_name)
+        _print_pipeline_result(result)
+        if args.output_errors:
+            with open(args.output_errors, "w") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+    elif args.input and args.pipeline_check:
+        wb = load_world_book(args.input)
+        entries_data = wb.get("entries", {})
+        entries = list(entries_data.values())
+        src = Path(args.input).name
+        result = _pipeline_check_single(entries, src)
+        if args.output_errors:
+            with open(args.output_errors, "w") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+        else:
+            _print_pipeline_result(result)
+    else:
+        run(args.input, args.output_errors, args.strict)
